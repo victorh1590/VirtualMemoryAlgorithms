@@ -32,7 +32,7 @@ typedef struct {
 // - A tabela de páginas
 // - O tamanho da mesma
 // - A última página acessada
-// - A primeira modura acessada (para fifo)
+// - A primeira moldura acessada (para fifo)
 // - O número de molduras
 // - Se a última instrução gerou um ciclo de clock
 //
@@ -40,7 +40,12 @@ typedef struct {
 
 int fifo(int8_t** page_table, int num_pages, int prev_page,
          int fifo_frm, int num_frames, int clock) {
-    return -1;
+    int page = 0; // Contador.
+    // Enquanto não encontrar a primeira página acessada na tabela.
+    while( page_table[page][PT_FRAMEID] != fifo_frm ) { 
+        page++; // Incremente o contador e continue procurando.
+    }
+    return page; // Encontrei! ~> Retorna o número da página a ser removida.
 }
 
 int second_chance(int8_t** page_table, int num_pages, int prev_page,
@@ -50,6 +55,51 @@ int second_chance(int8_t** page_table, int num_pages, int prev_page,
 
 int nru(int8_t** page_table, int num_pages, int prev_page,
         int fifo_frm, int num_frames, int clock) {
+    int page = 0;
+
+    while (page < num_pages) {
+        if(page_table[page][PT_MAPPED] == 1 && page_table[page][PT_REFERENCE_BIT] == 0 && page_table[page][PT_DIRTY] == 0) {
+            return page;
+        }
+        page++;
+    }
+    page -= 1;
+
+    while (page >= 0) {
+        if(page_table[page][PT_MAPPED] == 1 && page_table[page][PT_REFERENCE_BIT] == 0 && page_table[page][PT_DIRTY] == 1) {
+            return page;
+        }
+        page--;
+    }
+    page += 1;
+
+    while (page < num_pages) {
+        if(page_table[page][PT_MAPPED] == 1 && page_table[page][PT_REFERENCE_BIT] == 1 && page_table[page][PT_DIRTY] == 0) {
+            return page;
+        }
+        page++;
+    }
+    page -= 1;
+
+    while (page >= 0) {
+        if(page_table[page][PT_MAPPED] == 1 && page_table[page][PT_REFERENCE_BIT] == 1 && page_table[page][PT_DIRTY] == 1) {
+            return page;
+        }
+        page--;
+    }
+/*
+    if(page_table[page][PT_MAPPED] == 1 && page_table[page][PT_REFERENCE_BIT] == 0 && page_table[page][PT_DIRTY] == 1) {
+        return page;
+    }
+
+    if(page_table[page][PT_MAPPED] == 1 && page_table[page][PT_REFERENCE_BIT] == 1 && page_table[page][PT_DIRTY] == 0) {
+        return page;
+    }
+
+    if(page_table[page][PT_MAPPED] == 1 && page_table[page][PT_DIRTY] == 1 && page_table[page][PT_DIRTY] == 1) {
+        return page;
+    }
+*/
     return -1;
 }
 
@@ -98,6 +148,7 @@ int simulate(int8_t **page_table, int num_pages, int *prev_page, int *fifo_frm,
     }
 
     int next_frame_addr;
+    
     if ((*num_free_frames) > 0) { // Ainda temos memória física livre!
         next_frame_addr = find_next_frame(physical_memory, num_free_frames,
                                           num_frames, prev_free);
@@ -233,6 +284,9 @@ int main(int argc, char **argv) {
     int prev_free = -1;
     int prev_page = -1;
     int fifo_frm = -1;
+
+    // int *fifo_buffer;
+    // fifo_buffer = (int *)malloc(num_frames * sizeof(int))
 
     // Roda o simulador
     srand(time(NULL));
