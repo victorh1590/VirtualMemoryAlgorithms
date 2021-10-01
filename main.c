@@ -42,15 +42,55 @@ int fifo(int8_t** page_table, int num_pages, int prev_page,
          int fifo_frm, int num_frames, int clock) {
     int page = 0; // Contador.
     // Enquanto não encontrar a primeira página acessada na tabela.
-    while( page_table[page][PT_FRAMEID] != fifo_frm ) { 
+    while( page_table[page][PT_FRAMEID] != fifo_frm) { 
         page++; // Incremente o contador e continue procurando.
     }
     return page; // Encontrei! ~> Retorna o número da página a ser removida.
 }
 
+int second_chance_find_page(int8_t** page_table, int num_pages, int fifo_frm) {
+  int page;
+  for(page = 0; page < num_pages; page++) {
+    if(page_table[page][PT_FRAMEID] == fifo_frm && page_table[page][PT_MAPPED] == 1) {
+      if(page_table[page][PT_REFERENCE_BIT] == 1) {
+        page_table[page][PT_REFERENCE_BIT] = 0;
+      } else {
+        return page;
+      }
+    }
+  }
+  return -1;
+}
+
+int second_chance_counter(int counter, int num_frames) {
+  return ++counter >= num_frames ?  0 : counter;
+}
+
+int second_chance_full_cycle(int q_start, int fifo_frm) {
+  return q_start == fifo_frm ? 1 : 0;
+}
+
 int second_chance(int8_t** page_table, int num_pages, int prev_page,
                   int fifo_frm, int num_frames, int clock) {
-    return -1;
+  int page, i, fifo_frm_dup = fifo_frm;
+
+  int q_start = fifo_frm;
+  int* queue = (int*) malloc(num_frames*sizeof(int));
+
+  for(page = 0, i=0; page<num_pages; page++) {
+    if(page_table[page][PT_FRAMEID] == q_start && page_table[page][PT_MAPPED] == 1) {
+      queue[i++] = page;
+      q_start = second_chance_counter(q_start, num_frames);
+      if(second_chance_full_cycle(q_start, fifo_frm)) { break; } else { page = -1; }
+    }
+  }
+  q_start = fifo_frm;
+  for(i=0; i<num_frames; i++) {
+    page = queue[i];
+    if(page_table[page][PT_REFERENCE_BIT] == 1) { page_table[page][PT_REFERENCE_BIT] = 0; }
+    else { return page; }
+  }
+  return queue[0];
 }
 
 int nru(int8_t** page_table, int num_pages, int prev_page,
@@ -157,6 +197,7 @@ int simulate(int8_t **page_table, int num_pages, int *prev_page, int *fifo_frm,
         *num_free_frames = *num_free_frames - 1;
     } else { // Precisamos liberar a memória!
         assert(*num_free_frames == 0);
+        // printf("%d\n", *fifo_frm);
         int to_free = evict(page_table, num_pages, *prev_page, *fifo_frm,
                             num_frames, clock);
         assert(to_free >= 0);
