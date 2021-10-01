@@ -142,7 +142,24 @@ int nru(int8_t** page_table, int num_pages, int prev_page,
 
 int aging(int8_t** page_table, int num_pages, int prev_page,
           int fifo_frm, int num_frames, int clock) {
-    return -1;
+  int page = num_pages;
+  int lower = 0;
+  if(clock) { // Incrementa contadores na interrupção do clock.
+    for (page=0; page<num_pages;page++) {
+      page_table[page][PT_AGING_COUNTER] += page_table[page][PT_REFERENCE_BIT];
+      if(page_table[page][PT_MAPPED] == 1) { 
+        lower = page;
+      }
+    }
+  }
+  while(--page > -1) { // Seleciona página para ser removida.
+    if(page_table[page][PT_MAPPED] == 1) {
+      if(page_table[page][PT_AGING_COUNTER] <= page_table[lower][PT_AGING_COUNTER]) {
+        lower = page;
+      }
+    }
+  }
+  return lower;
 }
 
 int random_page(int8_t** page_table, int num_pages, int prev_page,
