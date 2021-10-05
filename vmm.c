@@ -38,63 +38,66 @@ typedef struct {
 //
 // Adicione mais parâmetros caso ache necessário
 
+// Fifo
 int fifo(int8_t** page_table, int num_pages, int prev_page,
          int fifo_frm, int num_frames, int clock) {
     int page = 0; // Contador.
     // Enquanto não encontrar a primeira página acessada na tabela.
-    while( page_table[page][PT_FRAMEID] != fifo_frm) { 
+    while( page_table[page][PT_FRAMEID] != fifo_frm ) { 
         page++; // Incremente o contador e continue procurando.
     }
     return page; // Encontrei! ~> Retorna o número da página a ser removida.
 }
 
+// Second Chance
 // Incrementa q_start. Se q_start for igual ao número de frames, q_start incrementa para zero (contador circular).
 int second_chance_counter(int counter, int num_frames) {
-  return ++counter >= num_frames ?  0 : counter;
+    return ++counter >= num_frames ?  0 : counter;
 }
 
 // Verifica se o contador q_start fez um ciclo completo (ex: 0-1-2-0 <- Ciclo completo).
 int second_chance_full_cycle(int q_start, int fifo_frm) {
-  return q_start == fifo_frm ? 1 : 0;
+    return q_start == fifo_frm ? 1 : 0;
 }
 
 int second_chance(int8_t** page_table, int num_pages, int prev_page,
                   int fifo_frm, int num_frames, int clock) {
-  int page, i;
-  // Declara uma fila com o inteiro q_start marcando a página a mais tempo na memória (início da fila).
-  int q_start = fifo_frm;
-  int* queue = (int*) malloc(num_frames*sizeof(int));
+    int page, i;
+    //  Declara uma fila com o inteiro q_start marcando a página a mais tempo na memória (início da fila).
+    int q_start = fifo_frm;
+    int* queue = (int*) malloc(num_frames*sizeof(int));
 
-  // Procura as páginas mapeadas na memória e insere na fila criada acima.
-  //  Incrementando q_start até que ocorra um ciclo (ex: 0-1-2-0 <- Ciclo completo)
-  //  elimina-se a necessidade de um segundo for dentro do for a seguir.
-  //  Quando o ciclo ocorrer significa que a fila contém todas as páginas mapeadas,
-  //  sendo queue[0] a mais antiga e queue[num_frames - 1] a mais recente.
-  for(page=0, i=0; page<num_pages; page++) {
-    //Quando encontrarmos a página que mapeia o frame marcado por q_start, adicione-a à fila.
-    if(page_table[page][PT_FRAMEID] == q_start && page_table[page][PT_MAPPED] == 1) {
-      queue[i++] = page; // Adiciona página à fila.
-      q_start = second_chance_counter(q_start, num_frames); // Incrementa q_start.
-      if(second_chance_full_cycle(q_start, fifo_frm)) { break; } else { page = -1; } //q_start fez um ciclo?
+    //  Procura as páginas mapeadas na memória e insere na fila criada acima.
+    //  Incrementando q_start até que ocorra um ciclo (ex: 0-1-2-0 <- Ciclo completo)
+    //  elimina-se a necessidade de um segundo for dentro do for a seguir.
+    //  Quando o ciclo ocorrer significa que a fila contém todas as páginas mapeadas,
+    //  sendo queue[0] a mais antiga e queue[num_frames - 1] a mais recente.
+    for(page=0, i=0; page<num_pages; page++) {
+        //Quando encontrarmos a página que mapeia o frame marcado por q_start, adicione-a à fila.
+        if(page_table[page][PT_FRAMEID] == q_start && page_table[page][PT_MAPPED] == 1) {
+            queue[i++] = page; // Adiciona página à fila.
+            q_start = second_chance_counter(q_start, num_frames); // Incrementa q_start.
+            if(second_chance_full_cycle(q_start, fifo_frm)) { break; } else { page = -1; } //q_start fez um ciclo?
+        }
     }
-  }
-  // Percorre a fila procurando por um elemento com bit de referência igual a 0.
-  for(i=0; i<num_frames; i++) {
-    page = queue[i];
-    //Se o bit de referência for 1, torná-lo 0. Senão retornar página.
-    if(page_table[page][PT_REFERENCE_BIT] == 1) { page_table[page][PT_REFERENCE_BIT] = 0; }
-    else { return page; }
-  }
-  // A fila fez um ciclo completo zerando bits, logo queue[0] será removida por ser mais antiga.
-  // Comportamento FIFO.
-  return queue[0]; 
+    // Percorre a fila procurando por um elemento com bit de referência igual a 0.
+    for(i=0; i<num_frames; i++) {
+        page = queue[i];
+        //Se o bit de referência for 1, torná-lo 0. Senão retornar página.
+        if(page_table[page][PT_REFERENCE_BIT] == 1) { page_table[page][PT_REFERENCE_BIT] = 0; }
+        else { return page; }
+        }
+    // A fila fez um ciclo completo zerando bits, logo queue[0] será removida por ser mais antiga.
+    // Comportamento FIFO.
+    return queue[0]; 
 }
 
+// NRU
 int nru(int8_t** page_table, int num_pages, int prev_page,
         int fifo_frm, int num_frames, int clock) {
     int page = 0;
 
-    while (page < num_pages) {
+    while (page < num_pages) { // Alguma página não referenciada e não modificada?
         if(page_table[page][PT_MAPPED] == 1 && page_table[page][PT_REFERENCE_BIT] == 0 && page_table[page][PT_DIRTY] == 0) {
             return page;
         }
@@ -102,7 +105,7 @@ int nru(int8_t** page_table, int num_pages, int prev_page,
     }
     page -= 1;
 
-    while (page >= 0) {
+    while (page >= 0) { // Alguma página não referenciada?
         if(page_table[page][PT_MAPPED] == 1 && page_table[page][PT_REFERENCE_BIT] == 0 && page_table[page][PT_DIRTY] == 1) {
             return page;
         }
@@ -110,7 +113,7 @@ int nru(int8_t** page_table, int num_pages, int prev_page,
     }
     page += 1;
 
-    while (page < num_pages) {
+    while (page < num_pages) { // Alguma página não modificada?
         if(page_table[page][PT_MAPPED] == 1 && page_table[page][PT_REFERENCE_BIT] == 1 && page_table[page][PT_DIRTY] == 0) {
             return page;
         }
@@ -118,48 +121,36 @@ int nru(int8_t** page_table, int num_pages, int prev_page,
     }
     page -= 1;
 
-    while (page >= 0) {
+    while (page >= 0) {  // Então remova qualquer uma.
         if(page_table[page][PT_MAPPED] == 1 && page_table[page][PT_REFERENCE_BIT] == 1 && page_table[page][PT_DIRTY] == 1) {
             return page;
         }
         page--;
     }
-/*
-    if(page_table[page][PT_MAPPED] == 1 && page_table[page][PT_REFERENCE_BIT] == 0 && page_table[page][PT_DIRTY] == 1) {
-        return page;
-    }
-
-    if(page_table[page][PT_MAPPED] == 1 && page_table[page][PT_REFERENCE_BIT] == 1 && page_table[page][PT_DIRTY] == 0) {
-        return page;
-    }
-
-    if(page_table[page][PT_MAPPED] == 1 && page_table[page][PT_DIRTY] == 1 && page_table[page][PT_DIRTY] == 1) {
-        return page;
-    }
-*/
     return -1;
 }
 
+// Aging (NFU)
 int aging(int8_t** page_table, int num_pages, int prev_page,
           int fifo_frm, int num_frames, int clock) {
-  int page = num_pages;
-  int lower = 0;
-  if(clock) { // Incrementa contadores na interrupção do clock.
-    for (page=0; page<num_pages;page++) {
-      page_table[page][PT_AGING_COUNTER] += page_table[page][PT_REFERENCE_BIT];
-      if(page_table[page][PT_MAPPED] == 1) { 
-        lower = page;
-      }
+    int page = num_pages;
+    int lower = 0;
+    if(clock) { // Incrementa contadores na interrupção do clock.
+        for (page=0; page<num_pages;page++) {
+            page_table[page][PT_AGING_COUNTER] += page_table[page][PT_REFERENCE_BIT];
+            if(page_table[page][PT_MAPPED] == 1) { 
+                lower = page;
+            }
+        }
     }
-  }
-  while(--page > -1) { // Seleciona página para ser removida.
-    if(page_table[page][PT_MAPPED] == 1) {
-      if(page_table[page][PT_AGING_COUNTER] <= page_table[lower][PT_AGING_COUNTER]) {
-        lower = page;
-      }
+    while(--page > -1) { // Seleciona página para ser removida.
+        if(page_table[page][PT_MAPPED] == 1) {
+            if(page_table[page][PT_AGING_COUNTER] <= page_table[lower][PT_AGING_COUNTER]) {
+                lower = page;
+            }
+        }
     }
-  }
-  return lower;
+    return lower;
 }
 
 int random_page(int8_t** page_table, int num_pages, int prev_page,
@@ -211,7 +202,6 @@ int simulate(int8_t **page_table, int num_pages, int *prev_page, int *fifo_frm,
         *num_free_frames = *num_free_frames - 1;
     } else { // Precisamos liberar a memória!
         assert(*num_free_frames == 0);
-        // printf("%d\n", *fifo_frm);
         int to_free = evict(page_table, num_pages, *prev_page, *fifo_frm,
                             num_frames, clock);
         assert(to_free >= 0);
