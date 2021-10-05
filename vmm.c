@@ -43,7 +43,7 @@ int fifo(int8_t** page_table, int num_pages, int prev_page,
          int fifo_frm, int num_frames, int clock) {
     int page = 0; // Contador.
     // Enquanto não encontrar a primeira página acessada na tabela.
-    while( page_table[page][PT_FRAMEID] != fifo_frm ) { 
+    while(page_table[page][PT_FRAMEID] != fifo_frm) { 
         page++; // Incremente o contador e continue procurando.
     }
     return page; // Encontrei! ~> Retorna o número da página a ser removida.
@@ -153,6 +153,7 @@ int aging(int8_t** page_table, int num_pages, int prev_page,
     return lower;
 }
 
+// Random
 int random_page(int8_t** page_table, int num_pages, int prev_page,
                 int fifo_frm, int num_frames, int clock) {
     int page = rand() % num_pages;
